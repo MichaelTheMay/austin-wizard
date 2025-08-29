@@ -130,4 +130,102 @@ export function isLikelyPersonName(raw: string | null | undefined): boolean {
   // Accept as person name
   return true;
 }
+
+// Split an owner string which may contain multiple individual names into
+// an array of { first, last, full } pairs. Conservative: returns empty
+// array when the input doesn't look like person names.
+export function splitPersonNames(raw: string | null | undefined): { first: string; last: string; full: string }[] {
+  if (!raw) return [];
+  const s = String(raw).trim();
+  if (!s) return [];
+
+  // Normalize separators commonly used between co-owners
+  const parts = s
+    // replace common separators with pipe
+    .replace(/\s+&\s+|\s+AND\s+|\s*\/\s*|;|\|/gi, "|")
+    // split by comma, but avoid splitting last, first pairs like "Smith, John" by first normalizing
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const out: { first: string; last: string; full: string }[] = [];
+
+  const suffixes = /\b(JR|SR|II|III|IV|V|MD|ESQ|PHD)\.?$/i;
+  const titles = /^(MR|MRS|MS|DR|MISS)\.?/i;
+
+  for (let part of parts) {
+    // If the part looks like 'LAST, FIRST [MIDDLE]' convert to 'FIRST MIDDLE LAST'
+    if (/,/.test(part)) {
+      const pieces = part.split(",").map((x) => x.trim()).filter(Boolean);
+      if (pieces.length >= 2) {
+        // join remaining as first/middle
+        const last = pieces[0];
+        const first = pieces.slice(1).join(" ");
+        part = `${first} ${last}`;
+      }
+    }
+
+    // Remove enclosing parentheses or extraneous markers
+    part = part.replace(/^\(+|\)+$/g, "").trim();
+
+  // Drop common business-like tokens if present (safety)
+  if (!isLikelyPersonName(part)) continue;
+
+    // strip titles and suffixes
+    part = part.replace(titles, "").replace(suffixes, "").trim();
+    const tokens = part.split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) continue;
+
+    let first = "";
+    let last = "";
+
+    if (tokens.length === 1) {
+      first = tokens[0];
+      last = "";
+    } else {
+      first = tokens[0];
+      last = tokens[tokens.length - 1];
+      // handle cases like 'Mary Ann Smith' -> first='Mary', last='Smith'
+      // keep middle names out of the pair
+    }
+
+    out.push({ first, last, full: part });
+  }
+
+  return out;
+}
+
+// Normalize owner name: trim, collapse whitespace, remove excessive punctuation,
+// and return a Title Case-ish cleaned string suitable for display/export.
+export function normalizeOwnerName(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let s = String(raw).trim();
+  // Remove extra punctuation but preserve apostrophes and hyphens
+  s = s.replace(/["#\$%\^&\*\+=<>\(\)\[\]\{\}:;~`]+/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  // Lowercase then Title Case each token
+  s = s.toLowerCase();
+  s = s.split(" ").map((t) => t.length > 0 ? (t[0].toUpperCase() + t.slice(1)) : t).join(" ");
+  return s;
+}
+
+// Normalize address to collapse whitespace and standardize casing minimally
+export function normalizeAddress(raw: string | null | undefined): string {
+  if (!raw) return "";
+  let s = String(raw).trim();
+  s = s.replace(/[\t\n\r]+/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  return s;
+}
+
+// Parse a numeric-like field (e.g., "$1,234,567" or "1,234.56") into a number.
+export function parseNumber(v: any): number {
+  if (v == null) return 0;
+  if (typeof v === "number") return v;
+  let s = String(v);
+  // strip currency symbols and spaces
+  s = s.replace(/\$/g, "").replace(/,/g, "").trim();
+  const n = Number(s);
+  return isFinite(n) ? n : 0;
+}
   

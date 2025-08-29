@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import "./app.css";
 import { CONFIG, fetchJSON, fetchJSONWithRetry } from "./lib/api";
-import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile, isLikelyPersonName } from "./lib/utils";
+import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile, isLikelyPersonName, splitPersonNames, normalizeOwnerName, normalizeAddress, parseNumber } from "./lib/utils";
 import BarList from "./components/BarList";
 
 /**
@@ -152,7 +152,23 @@ export default function App() {
     });
     const rows = (res.features || []).map((feat: any) => {
       const a = feat.attributes || {};
-      return { ...a, _zip5: zip5(a.situs_zip), _owner_type: classifyOwner(a.py_owner_name) };
+      // cleaned fields
+      const owner_clean = normalizeOwnerName(a.py_owner_name || "");
+      const situs_clean = normalizeAddress(a.situs_address || "");
+      const market_value_num = parseNumber(a.market_value);
+      const owner_persons = splitPersonNames(a.py_owner_name);
+      const first_person = owner_persons[0] || null;
+      return {
+        ...a,
+        _zip5: zip5(a.situs_zip),
+        _owner_type: classifyOwner(a.py_owner_name),
+        _owner_clean: owner_clean,
+        _situs_clean: situs_clean,
+        _market_value_num: market_value_num,
+        _owner_persons: owner_persons,
+        _owner_first: first_person ? first_person.first : null,
+        _owner_last: first_person ? first_person.last : null,
+      };
     });
     return rows;
   }
@@ -197,7 +213,7 @@ export default function App() {
   function exportCurrentPage(filename: string) {
     const rows = pageRowsFilteredByTab;
     const cols = [
-      ["py_owner_name", "Owner"], ["situs_address", "Situs Address"], ["_zip5", "ZIP"],
+  ["py_owner_name", "Owner"], ["_owner_first", "First Name"], ["_owner_last", "Last Name"], ["_owner_clean", "Owner (clean)"], ["_situs_clean", "Situs Address"], ["_zip5", "ZIP"],
       ["PROP_ID", "Parcel ID"], ["geo_id", "Geo ID"], ["land_type_desc", "Land Type"],
       ["tcad_acres", "Acres"], ["market_value", "Market Value"], ["appraised_val", "Appraised"], ["assessed_val", "Assessed"],
     ].filter(([k]) => rows.some((r) => r[k] != null));
