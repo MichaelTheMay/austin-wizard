@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.12",
+    "buffer": "^6.0.3",
+    "http": "^0.0.1-security",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
