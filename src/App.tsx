@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import "./app.css";
 import { CONFIG, fetchJSON, fetchJSONWithRetry } from "./lib/api";
 import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile, isLikelyPersonName, splitPersonNames, normalizeOwnerName, normalizeAddress, parseNumber, normalizeOwnerKey } from "./lib/utils";
 import BarList from "./components/BarList";
+import ErrorBoundary from "./components/ErrorBoundary";
+const Analytics = React.lazy(() => import("./pages/Analytics"));
 
 /**
  * Travis County ZIP + Owner Scraper Wizard (with Austin Geocoder)
@@ -31,6 +33,13 @@ type ZipRow = { zip: string; count: number };
 
 // ------------------------- main -------------------------
 export default function App() {
+  // Simple hash-based routing
+  const [route, setRoute] = useState<string>(() => location.hash.replace(/^#/, "") || "/");
+  useEffect(() => {
+    const onHash = () => setRoute(location.hash.replace(/^#/, "") || "/");
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   const [zips, setZips] = useState<ZipRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -535,7 +544,15 @@ export default function App() {
       {loading && <p>Loading…</p>}
       {error && <p className="text-red-600">Error: {error}</p>}
 
-      {!loading && !error && (
+      {route === "/analytics" && (
+        <ErrorBoundary>
+          <React.Suspense fallback={<div className="p-4">Loading analytics…</div>}>
+            <Analytics quickStats={{ owners, zips: zipLeaders }} onRefresh={() => runDataLab()} />
+          </React.Suspense>
+        </ErrorBoundary>
+      )}
+
+      {route !== "/analytics" && !loading && !error && (
         <div className="space-y-4">
           {/* Controls */}
           <div className="flex flex-wrap gap-3 items-center rounded-2xl border bg-white/80 dark:bg-slate-900/50 backdrop-blur p-4 shadow-sm dark:border-slate-700">
@@ -571,6 +588,13 @@ export default function App() {
               className="ml-auto px-3 py-2 rounded-xl bg-amber-600 text-white hover:bg-amber-500 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-400 transition"
             >
               Open Data Lab
+            </button>
+
+            <button
+              onClick={() => (location.hash = "#/analytics")}
+              className="px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 dark:border-slate-700 transition"
+            >
+              Analytics
             </button>
 
             <span className="text-sm text-emerald-700 font-semibold dark:text-emerald-300">
