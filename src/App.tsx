@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import "./app.css";
 import { CONFIG, fetchJSON, fetchJSONWithRetry } from "./lib/api";
 import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile } from "./lib/utils";
