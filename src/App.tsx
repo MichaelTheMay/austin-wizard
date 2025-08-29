@@ -366,19 +366,19 @@ export default function App() {
       if (showLandUse) {
         const list = await groupBy("land_type_desc", baseWhere, ownerClause, ctrl.signal, { statType: "count", take: 50 });
         // Normalize undefined/empty into "(Unknown)"
-        const norm = list.map((x) => ({ name: x.key || "(Unknown)", count: x.value }));
-        setLandUse(norm.sort((a, b) => b.count - a.count).slice(0, 20));
+        const norm = list.map((x: any) => ({ name: x.key || "(Unknown)", count: x.value }));
+        setLandUse(norm.sort((a: any, b: any) => b.count - a.count).slice(0, 20));
       } else setLandUse([]);
 
       // Top owners (by value and count)
       if (showTopOwners) {
         const topCount = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "count", take: 40 });
         const topValue = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "sum", statField: "market_value", take: 40 });
-        const mVal = new Map(topValue.map((x) => [x.key, x.value]));
+        const mVal = new Map(topValue.map((x: any) => [x.key, x.value]));
         const merged = topCount
-          .filter((x) => x.key) // drop blank
-          .map((x) => ({ owner: x.key, parcels: x.value, total: mVal.get(x.key) || 0 }))
-          .sort((a, b) => (b.total - a.total || b.parcels - a.parcels))
+          .filter((x: any) => x.key) // drop blank
+          .map((x: any) => ({ owner: x.key, parcels: x.value, total: mVal.get(x.key) || 0 }))
+          .sort((a: any, b: any) => (b.total - a.total || b.parcels - a.parcels))
           .slice(0, 20);
         setOwners(merged);
       } else setOwners([]);
@@ -413,11 +413,7 @@ export default function App() {
     }
   }
 
-  function exportTile(rows: any[], filename: string) {
-    if (!rows.length) return;
-    const headers = Object.keys(rows[0]);
-    exportCSV(rows, headers, filename);
-  }
+  // use exportTile from utils
 
   // Drill-ins
   function drillOwner(owner: string) {
@@ -428,24 +424,7 @@ export default function App() {
   }
   function drillZip(zip: string) { expandZip(zip); }
 
-  // Simple bar chart component
-  const BarList: React.FC<{ data: { label: string; value: number; hint?: string }[]; onClick?: (label: string) => void; maxBars?: number }> = ({ data, onClick, maxBars = 12 }) => {
-    const top = data.slice(0, maxBars);
-    const max = Math.max(1, ...top.map((d) => d.value));
-    return (
-      <div className="barlist">
-        {top.map((d) => (
-          <div key={d.label} className={`barrow ${onClick ? "clickable" : ""}`} onClick={() => onClick?.(d.label)}>
-            <div className="barlabel" title={d.hint || d.label}>{d.label}</div>
-            <div className="bartrack">
-              <div className="barfill" style={{ width: `${(d.value / max) * 100}%` }} />
-            </div>
-            <div className="barvalue">{d.value.toLocaleString()}</div>
-          </div>
-        ))}
-      </div>
-    );
-  };
+  // BarList component is imported from components/BarList
 
   // =================================================================
   // UI
