@@ -1,1 +1,1 @@
-import '@testing-library/jest-dom';
+// setupTests left intentionally minimal to avoid extra runtime deps in this environment
