@@ -272,6 +272,7 @@ export default function App() {
   // DataLab state
   const [labLoading, setLabLoading] = useState(false);
   const [labError, setLabError] = useState<string | null>(null);
+  const [labLastRequest, setLabLastRequest] = useState<any>(null);
   const abortLabRef = useRef<AbortController | null>(null);
 
   // results
@@ -345,7 +346,7 @@ export default function App() {
       let w = `(${baseWhere}) AND (${ownerClause})`;
       if (b.lo != null) w += ` AND ${field} > ${b.lo}`;
       if (b.hi != null) w += ` AND ${field} <= ${b.hi}`;
-      const res = await fetchJSONWithRetry(CONFIG.parcelsLayer + "/query", { f: "json", where: w, returnCountOnly: true }, signal);
+  const res = await fetchJSONWithRetry(CONFIG.parcelsLayer + "/query", { f: "json", where: w, returnCountOnly: true }, signal);
       out.push({ label: b.label, count: Number(res.count || 0) });
     }
     return out;
@@ -370,6 +371,21 @@ export default function App() {
     return (res.features || []).map((f: any) => ({ key: f.attributes[field], value: Number(f.attributes[alias] || 0) }));
   }
 
+  // helper to surface better diagnostics when a fetch fails inside Data Lab
+  async function safeFetch(label: string, url: string, body: Record<string, any> | undefined, signal: AbortSignal | undefined) {
+    setLabLastRequest({ label, url, body });
+    try {
+      const res = await fetchJSONWithRetry(url, body as any, signal as any);
+      return res;
+    } catch (err: any) {
+      console.error(`Data Lab fetch failed (${label})`, { url, body, err });
+      const msg = `${label} failed: ${err?.message || String(err)}`;
+      // surface a helpful message to the UI
+      setLabError(msg);
+      throw new Error(msg);
+    }
+  }
+
   async function runDataLab() {
     const ctrl = new AbortController();
     abortLabRef.current = ctrl;
@@ -380,9 +396,9 @@ export default function App() {
       const ownerClause = ownerScopeWhere(labOwnerScope);
 
       // KPIs
-      const totalP = await fetchJSONWithRetry(CONFIG.parcelsLayer + "/query", { f: "json", where: `(${baseWhere}) AND (${ownerClause})`, returnCountOnly: true }, ctrl.signal);
-      const bizP = await fetchJSONWithRetry(CONFIG.parcelsLayer + "/query", { f: "json", where: `(${baseWhere}) AND (${ownerScopeWhere("business")})`, returnCountOnly: true }, ctrl.signal);
-      const sumValRes = await fetchJSONWithRetry(CONFIG.parcelsLayer + "/query", {
+      const totalP = await safeFetch("countTotal", CONFIG.parcelsLayer + "/query", { f: "json", where: `(${baseWhere}) AND (${ownerClause})`, returnCountOnly: true }, ctrl.signal);
+      const bizP = await safeFetch("countBusiness", CONFIG.parcelsLayer + "/query", { f: "json", where: `(${baseWhere}) AND (${ownerScopeWhere("business")})`, returnCountOnly: true }, ctrl.signal);
+      const sumValRes = await safeFetch("sumValue", CONFIG.parcelsLayer + "/query", {
         f: "json",
         where: `(${baseWhere}) AND (${ownerClause})`,
         outStatistics: [{ statisticType: "sum", onStatisticField: "market_value", outStatisticFieldName: "s" }],
@@ -547,7 +563,7 @@ export default function App() {
       {route === "/analytics" && (
         <ErrorBoundary>
           <React.Suspense fallback={<div className="p-4">Loading analytics…</div>}>
-            <Analytics quickStats={{ owners, zips: zipLeaders }} onRefresh={() => runDataLab()} />
+            <Analytics quickStats={{ owners, zips: zipLeaders }} onRefresh={() => runDataLab()} onBack={() => (location.hash = "")} />
           </React.Suspense>
         </ErrorBoundary>
       )}
@@ -797,6 +813,9 @@ export default function App() {
             {/* RESULTS */}
             <div className="p-4 space-y-4">
               {labError && <div className="text-rose-600 text-sm">{labError}</div>}
+              {labError && labLastRequest && (
+                <div className="text-xs text-rose-400">Last request: {labLastRequest.label} • {labLastRequest.url}</div>
+              )}
               {labLoading && <div className="text-sm">Crunching numbers…</div>}
 
               {/* KPIs */}

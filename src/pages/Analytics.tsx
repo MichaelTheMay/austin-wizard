@@ -1,12 +1,13 @@
 import React from "react";
 import BarList from "../components/BarList";
 
-const Analytics: React.FC<{ quickStats: any; onRefresh?: () => void }> = ({ quickStats, onRefresh }) => {
+const Analytics: React.FC<{ quickStats: any; onRefresh?: () => void; onBack?: () => void }> = ({ quickStats, onRefresh, onBack }) => {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-semibold">Analytics</h2>
         <div className="flex gap-2">
+          <button className="px-3 py-1 rounded border" onClick={onBack}>Back</button>
           <button className="px-3 py-1 rounded bg-emerald-600 text-white" onClick={onRefresh}>Refresh</button>
         </div>
       </div>

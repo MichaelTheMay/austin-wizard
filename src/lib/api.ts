@@ -6,6 +6,11 @@ export const CONFIG = {
 };
 
 export async function fetchJSON(url: string, body?: Record<string, any>, signal?: AbortSignal) {
+  // In dev, route ArcGIS hosts through Vite proxy to avoid CORS.
+  if (typeof location !== "undefined" && location.hostname === "localhost") {
+    if (url.includes("taxmaps.traviscountytx.gov")) url = url.replace("https://taxmaps.traviscountytx.gov", "/proxy/taxmaps");
+    if (url.includes("maps.austintexas.gov")) url = url.replace("https://maps.austintexas.gov", "/proxy/austin");
+  }
   const opts: RequestInit = body
     ? {
         method: "POST",
