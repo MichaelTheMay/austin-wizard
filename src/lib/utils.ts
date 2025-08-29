@@ -63,3 +63,37 @@ export function exportTile(rows: any[], filename: string) {
   const headers = Object.keys(rows[0]);
   exportCSV(rows, headers, filename);
 }
+
+// Small analytics helpers
+export function formatPercent(part: number, total: number, digits = 0) {
+  if (!total) return "0%";
+  const pct = (part / total) * 100;
+  return `${pct.toFixed(digits)}%`;
+}
+
+/**
+ * Approximate median from binned histogram counts.
+ * bins: [{ label, count }]
+ * ranges: array with same length where each item is { lo?: number; hi?: number }
+ * Returns approximate median numeric value (midpoint of bin containing median)
+ */
+export function approxMedianFromBins(
+  bins: { label: string; count: number }[],
+  ranges: Array<{ lo?: number; hi?: number }>
+): number {
+  const total = bins.reduce((s, b) => s + (b.count || 0), 0);
+  if (!total) return 0;
+  const half = total / 2;
+  let cum = 0;
+  for (let i = 0; i < bins.length; i++) {
+    cum += bins[i].count || 0;
+    if (cum >= half) {
+      const r = ranges[i] || {};
+      const lo = r.lo ?? 0;
+      const hi = r.hi ?? lo;
+      if (hi === undefined || hi <= lo) return lo;
+      return (lo + hi) / 2;
+    }
+  }
+  return 0;
+}

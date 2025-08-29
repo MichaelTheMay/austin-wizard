@@ -223,7 +223,7 @@ export default function App() {
   const abortLabRef = useRef<AbortController | null>(null);
 
   // results
-  const [kpi, setKpi] = useState<{ total: number; business: number; sumVal: number } | null>(null);
+  const [kpi, setKpi] = useState<{ total: number; business: number; sumVal: number; avgVal?: number; medianValEstimate?: number; topOwnerShare?: { owner: string; share: number } | null; topZipShare?: { zip: string; share: number } | null } | null>(null);
   const [histVal, setHistVal] = useState<{ label: string; count: number }[]>([]);
   const [histAcres, setHistAcres] = useState<{ label: string; count: number }[]>([]);
   const [landUse, setLandUse] = useState<{ name: string; count: number }[]>([]);
@@ -339,7 +339,9 @@ export default function App() {
       const total = Number(totalP.count || 0);
       const business = Number(bizP.count || 0);
       const sumVal = Number(sumValRes?.features?.[0]?.attributes?.s || 0);
-      setKpi({ total, business, sumVal });
+  // avg value
+  const avgVal = total ? sumVal / total : 0;
+  setKpi({ total, business, sumVal, avgVal });
 
       // Histograms
       if (showValueHist) {
@@ -350,7 +352,21 @@ export default function App() {
           { lo: 1000000, hi: 2000000, label: "$1m–$2m" },
           { lo: 2000000, label: ">$2m" },
         ];
-        setHistVal(await histogramCounts("market_value", binsVal, baseWhere, ownerClause, ctrl.signal));
+        const hv = await histogramCounts("market_value", binsVal, baseWhere, ownerClause, ctrl.signal);
+        setHistVal(hv);
+        // estimate median roughly from bins
+        try {
+          // import helper inline to avoid circular issues
+          // ranges mirror binsVal (lo/hi)
+          const ranges = [
+            { hi: 250000 }, { lo: 250000, hi: 500000 }, { lo: 500000, hi: 1000000 }, { lo: 1000000, hi: 2000000 }, { lo: 2000000 },
+          ];
+          const { approxMedianFromBins } = await import("./lib/utils");
+          const medianEst = approxMedianFromBins(hv, ranges);
+          setKpi((k) => k ? ({ ...k, medianValEstimate: medianEst }) : { total, business, sumVal, avgVal: total ? sumVal / total : 0, medianValEstimate: medianEst });
+        } catch {
+          // ignore
+        }
       } else setHistVal([]);
 
       if (showAcreHist) {
@@ -381,6 +397,11 @@ export default function App() {
           .sort((a: any, b: any) => (b.total - a.total || b.parcels - a.parcels))
           .slice(0, 20);
         setOwners(merged);
+        // compute top owner share
+        if (merged.length) {
+          const top = merged[0];
+          setKpi((k) => k ? ({ ...k, topOwnerShare: { owner: top.owner, share: top.total } }) : ({ total, business, sumVal, avgVal: total ? sumVal / total : 0, topOwnerShare: { owner: top.owner, share: top.total } }));
+        }
       } else setOwners([]);
 
       // Top ZIPs (aggregate to ZIP5)
@@ -402,7 +423,12 @@ export default function App() {
           cur.total += r.value; agg.set(z, cur);
         }
         const arr = Array.from(agg.entries()).map(([zip, v]) => ({ zip, parcels: v.parcels, total: v.total }));
-        setZipLeaders(arr.sort((a, b) => (b.parcels - a.parcels)).slice(0, 25));
+        const zl = arr.sort((a, b) => (b.parcels - a.parcels)).slice(0, 25);
+        setZipLeaders(zl);
+        if (zl.length) {
+          const top = zl[0];
+          setKpi((k) => k ? ({ ...k, topZipShare: { zip: top.zip, share: top.total } }) : ({ total, business, sumVal, avgVal: total ? sumVal / total : 0, topZipShare: { zip: top.zip, share: top.total } }));
+        }
       } else setZipLeaders([]);
 
     } catch (e: any) {
