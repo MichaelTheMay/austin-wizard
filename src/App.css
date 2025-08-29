@@ -1,3 +1,4 @@
+/* Base demo styles (kept) */
 #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -19,24 +20,102 @@
 }
 
 @keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
-
 @media (prefers-reduced-motion: no-preference) {
   a:nth-of-type(2) .logo {
     animation: logo-spin infinite 20s linear;
   }
 }
 
-.card {
-  padding: 2em;
+.card { padding: 2em; }
+
+.read-the-docs { color: #888; }
+
+/* ---------- Enhancements for Export Center & Modals ---------- */
+
+/* Smooth fade & slide for overlays */
+.fade-in { animation: fade-in .18s ease-out; }
+.slide-up { animation: slide-up .18s ease-out; }
+.slide-in-right { animation: slide-in-right .22s ease-out; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slide-up {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes slide-in-right {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
 }
 
-.read-the-docs {
-  color: #888;
+/* Tag-style toggles */
+.tag {
+  padding: 6px 10px;
+  border-radius: 9999px;
+  border: 1px solid rgba(100,116,139,.35); /* slate-400ish */
+  background: rgba(255,255,255,.7);
+  color: #0f172a; /* slate-900 */
+  font-size: 0.875rem;
+  transition: all .15s ease;
+}
+.tag:hover { background: rgba(99,102,241,.08); /* indigo-500/8 */ }
+.tag-active {
+  border-color: rgba(99,102,241,.8);
+  background: rgba(99,102,241,.12);
+  box-shadow: 0 0 0 3px rgba(99,102,241,.12);
+}
+
+/* Progress bar */
+.progress-wrap { display: grid; gap: 6px; }
+.progress-label {
+  font-size: 0.8rem;
+  color: #475569; /* slate-600 */
+}
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, rgba(15,23,42,.08), rgba(15,23,42,.05));
+  overflow: hidden;
+  border: 1px solid rgba(15,23,42,.12);
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #3b82f6);
+  transition: width .18s ease;
+}
+
+/* Log panel */
+.log-panel {
+  border: 1px solid rgba(100,116,139,.35);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.6);
+}
+.log-pre {
+  margin: 8px 0 0 0;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 12px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+/* Custom scrollbar (light/dark friendly) */
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100,116,139,.4) transparent;
+}
+.custom-scroll::-webkit-scrollbar { height: 8px; width: 8px; }
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(100,116,139,.4), rgba(100,116,139,.3));
+  border-radius: 9999px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
