@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import "./app.css";
 import { CONFIG, fetchJSON, fetchJSONWithRetry } from "./lib/api";
-import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile, isLikelyPersonName, splitPersonNames, normalizeOwnerName, normalizeAddress, parseNumber } from "./lib/utils";
+import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile, isLikelyPersonName, splitPersonNames, normalizeOwnerName, normalizeAddress, parseNumber, normalizeOwnerKey } from "./lib/utils";
 import BarList from "./components/BarList";
 
 /**
@@ -158,6 +158,7 @@ export default function App() {
       const market_value_num = parseNumber(a.market_value);
       const owner_persons = splitPersonNames(a.py_owner_name);
       const first_person = owner_persons[0] || null;
+      const owner_keys = owner_persons.map((p: any) => normalizeOwnerKey(p.full)).filter(Boolean);
       return {
         ...a,
         _zip5: zip5(a.situs_zip),
@@ -166,6 +167,7 @@ export default function App() {
         _situs_clean: situs_clean,
         _market_value_num: market_value_num,
         _owner_persons: owner_persons,
+        _owner_keys: owner_keys,
         _owner_first: first_person ? first_person.first : null,
         _owner_last: first_person ? first_person.last : null,
       };
@@ -217,10 +219,28 @@ export default function App() {
       ["PROP_ID", "Parcel ID"], ["geo_id", "Geo ID"], ["land_type_desc", "Land Type"],
       ["tcad_acres", "Acres"], ["market_value", "Market Value"], ["appraised_val", "Appraised"], ["assessed_val", "Assessed"],
     ].filter(([k]) => rows.some((r) => r[k] != null));
+      // add up to 5 owner columns
+      for (let i = 0; i < 5; i++) {
+        const idx = i + 1;
+        cols.push([`_owner_persons_${idx}_full`, `Owner ${idx} Full`]);
+        cols.push([`_owner_persons_${idx}_first`, `Owner ${idx} First`]);
+        cols.push([`_owner_persons_${idx}_last`, `Owner ${idx} Last`]);
+      }
+      // materialize owner person columns when mapping rows below
     const headers = cols.map(([, lbl]) => lbl);
-    const mapped = rows.map((r) => Object.fromEntries(cols.map(([k, lbl]) => [
-      lbl, ["market_value","appraised_val","assessed_val"].includes(k as string) ? formatUSD(r[k]) : r[k],
-    ])));
+    const mapped = rows.map((r) => {
+      const extra: Record<string, any> = {};
+      (r._owner_persons || []).slice(0, 5).forEach((p: any, i: number) => {
+        const n = i + 1;
+        extra[`_owner_persons_${n}_full`] = p.full;
+        extra[`_owner_persons_${n}_first`] = p.first;
+        extra[`_owner_persons_${n}_last`] = p.last;
+      });
+      return Object.fromEntries(cols.map(([k, lbl]) => [
+        lbl,
+        ["market_value","appraised_val","assessed_val"].includes(k as string) ? formatUSD(r[k]) : (extra[k as string] ?? r[k]),
+      ]));
+    });
     exportCSV(mapped as any, headers, filename);
   }
 
@@ -411,18 +431,40 @@ export default function App() {
 
       // Top owners (by value and count)
       if (showTopOwners) {
-        const topCount = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "count", take: 40 });
-        const topValue = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "sum", statField: "market_value", take: 40 });
-        const mVal = new Map(topValue.map((x: any) => [x.key, x.value]));
-        let merged = topCount
-          .filter((x: any) => x.key) // drop blank
-          .map((x: any) => ({ owner: x.key, parcels: x.value, total: mVal.get(x.key) || 0 }))
-          .sort((a: any, b: any) => (b.total - a.total || b.parcels - a.parcels));
-        // If user requested residential only, prefer owners that look like person names
-        if (labOwnerScope === "residential") {
-          merged = merged.filter((m: any) => isLikelyPersonName(m.owner));
+        const topCount = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "count", take: 400 });
+        const topValue = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "sum", statField: "market_value", take: 400 });
+        // Build maps by normalized owner key
+        const countMap = new Map<string, number>();
+        const valueMap = new Map<string, number>();
+        const displayMap = new Map<string, string>();
+
+        for (const t of topCount || []) {
+          const name = t.key || "";
+          const key = normalizeOwnerKey(name) || name.toLowerCase();
+          countMap.set(key, (countMap.get(key) || 0) + (t.value || 0));
+          if (!displayMap.has(key)) displayMap.set(key, name);
         }
-        merged = merged.slice(0, 20);
+        for (const t of topValue || []) {
+          const name = t.key || "";
+          const key = normalizeOwnerKey(name) || name.toLowerCase();
+          valueMap.set(key, (valueMap.get(key) || 0) + (t.value || 0));
+          if (!displayMap.has(key)) displayMap.set(key, name);
+        }
+
+        let mergedAgg = Array.from(new Set([...countMap.keys(), ...valueMap.keys()])).map((key) => ({
+          owner_key: key,
+          owner: displayMap.get(key) || key,
+          parcels: countMap.get(key) || 0,
+          total: valueMap.get(key) || 0,
+        }));
+
+        // If residential scope requested, filter to person-like keys
+        if (labOwnerScope === "residential") {
+          mergedAgg = mergedAgg.filter((m) => isLikelyPersonName(m.owner));
+        }
+
+        mergedAgg = mergedAgg.sort((a, b) => (b.total - a.total || b.parcels - a.parcels)).slice(0, 40);
+        const merged = mergedAgg.slice(0, 20).map((m) => ({ owner: m.owner, parcels: m.parcels, total: m.total }));
         setOwners(merged);
         // compute top owner share
         if (merged.length) {

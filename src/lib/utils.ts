@@ -143,22 +143,21 @@ export function splitPersonNames(raw: string | null | undefined): { first: strin
   const parts = s
     // replace common separators with pipe
     .replace(/\s+&\s+|\s+AND\s+|\s*\/\s*|;|\|/gi, "|")
-    // split by comma, but avoid splitting last, first pairs like "Smith, John" by first normalizing
     .split("|")
     .map((p) => p.trim())
     .filter(Boolean);
 
-  const out: { first: string; last: string; full: string }[] = [];
+  const out: { first: string; middle?: string; last: string; full: string }[] = [];
 
   const suffixes = /\b(JR|SR|II|III|IV|V|MD|ESQ|PHD)\.?$/i;
   const titles = /^(MR|MRS|MS|DR|MISS)\.?/i;
+  const particles = /^(DE|DA|DEL|LA|VAN|VON|MC|MAC|O')$/i;
 
   for (let part of parts) {
     // If the part looks like 'LAST, FIRST [MIDDLE]' convert to 'FIRST MIDDLE LAST'
     if (/,/.test(part)) {
       const pieces = part.split(",").map((x) => x.trim()).filter(Boolean);
       if (pieces.length >= 2) {
-        // join remaining as first/middle
         const last = pieces[0];
         const first = pieces.slice(1).join(" ");
         part = `${first} ${last}`;
@@ -168,31 +167,55 @@ export function splitPersonNames(raw: string | null | undefined): { first: strin
     // Remove enclosing parentheses or extraneous markers
     part = part.replace(/^\(+|\)+$/g, "").trim();
 
-  // Drop common business-like tokens if present (safety)
-  if (!isLikelyPersonName(part)) continue;
+    // Skip if not person-like
+    if (!isLikelyPersonName(part)) continue;
 
     // strip titles and suffixes
     part = part.replace(titles, "").replace(suffixes, "").trim();
     const tokens = part.split(/\s+/).filter(Boolean);
     if (tokens.length === 0) continue;
 
+    // Determine first / middle / last with some heuristics
     let first = "";
+    let middle = "";
     let last = "";
 
     if (tokens.length === 1) {
       first = tokens[0];
       last = "";
-    } else {
+    } else if (tokens.length === 2) {
       first = tokens[0];
-      last = tokens[tokens.length - 1];
-      // handle cases like 'Mary Ann Smith' -> first='Mary', last='Smith'
-      // keep middle names out of the pair
+      last = tokens[1];
+    } else {
+      // tokens length >=3
+      // If second-to-last token looks like a particle (de, van, etc.), treat last two as compound last name
+      const secondLast = tokens[tokens.length - 2];
+      if (particles.test(secondLast)) {
+        first = tokens[0];
+        middle = tokens.slice(1, -2).join(" ");
+        last = tokens.slice(-2).join(" ");
+      } else {
+        first = tokens[0];
+        middle = tokens.slice(1, -1).join(" ");
+        last = tokens[tokens.length - 1];
+      }
     }
 
-    out.push({ first, last, full: part });
+    out.push({ first, middle: middle || undefined, last, full: part });
   }
 
-  return out;
+  return out as any;
+}
+
+// Produce a normalized owner key for deduplication: "first last" in lowercase without punctuation
+export function normalizeOwnerKey(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const persons = splitPersonNames(raw);
+  if (!persons.length) return "";
+  const p = persons[0];
+  const key = `${p.first || ""} ${p.last || ""}`.trim().toLowerCase();
+  // remove punctuation
+  return key.replace(/[^a-z0-9\s']/gi, "").replace(/\s+/g, " ");
 }
 
 // Normalize owner name: trim, collapse whitespace, remove excessive punctuation,
