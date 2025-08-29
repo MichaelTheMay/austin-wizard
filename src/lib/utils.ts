@@ -97,3 +97,37 @@ export function approxMedianFromBins(
   }
   return 0;
 }
+
+// Heuristics to detect an individual person's name vs a business/entity name.
+export function isLikelyPersonName(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  const s = String(raw).trim();
+  if (!s) return false;
+  const u = s.toUpperCase();
+  // Reject common placeholders or signals
+  const negative = ["UNKNOWN", "UNKNOWN OWNER", "SEE DEED", "VACANT", "MULTIPLE", "DECEASED", "C/O", "%C/O%", "ATTN", "PO BOX", "P O BOX", "TRUSTEE", "ESTATE", "BANK", "ASSOCIATION", "HOA", "REMAINDER", "REMAINDERMAN", "UNIT#", "LOT#"];
+  for (const n of negative) if (u.includes(n)) return false;
+
+  // Reject if contains business tokens
+  for (const t of BIZ_LIKE_TOKENS) if (u.includes(t.trim())) return false;
+
+  // Remove punctuation and extra whitespace
+  const cleaned = s.replace(/[.,()\-\/]+/g, " ").replace(/\s+/g, " ").trim();
+  const parts = cleaned.split(" ").filter(Boolean);
+  // Require at least two name-like tokens (first + last)
+  if (parts.length < 2) return false;
+
+  // Reject if any part contains digits or typical address tokens
+  for (const p of parts) {
+    if (/\d/.test(p)) return false;
+    if (/^(LOT|BLK|UNIT|STE|APT|#)$/i.test(p)) return false;
+  }
+
+  // Reject if looks like an organization abbreviation (all short tokens)
+  const shortTokens = parts.filter((p) => p.length <= 2);
+  if (shortTokens.length >= parts.length - 1) return false;
+
+  // Accept as person name
+  return true;
+}
+  

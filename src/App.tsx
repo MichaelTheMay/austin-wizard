@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import "./app.css";
 import { CONFIG, fetchJSON, fetchJSONWithRetry } from "./lib/api";
-import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile } from "./lib/utils";
+import { zip5, cleanZip, formatUSD, exportCSV, classifyOwner, ownerScopeWhere, exportTile, isLikelyPersonName } from "./lib/utils";
 import BarList from "./components/BarList";
 
 /**
@@ -182,7 +182,14 @@ export default function App() {
   useEffect(() => { if (expandedZip) loadPage(1, false); }, [parcelSort.key, parcelSort.dir]);
 
   const pageRowsFilteredByTab = useMemo(
-    () => pageRows.filter((p) => classifyOwner(p.py_owner_name) === activeTab),
+    () => pageRows.filter((p) => {
+      const c = classifyOwner(p.py_owner_name);
+      if (activeTab === "residential") {
+        // require both classifyOwner=resident and owner appears to be a person's name
+        return c === "residential" && isLikelyPersonName(p.py_owner_name);
+      }
+      return c === activeTab;
+    }),
     [pageRows, activeTab]
   );
   const totalPages = useMemo(() => Math.max(1, Math.ceil((totalCount ?? 0) / pageSize)), [totalCount]);
@@ -391,16 +398,21 @@ export default function App() {
         const topCount = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "count", take: 40 });
         const topValue = await groupBy("py_owner_name", baseWhere, ownerClause, ctrl.signal, { statType: "sum", statField: "market_value", take: 40 });
         const mVal = new Map(topValue.map((x: any) => [x.key, x.value]));
-        const merged = topCount
+        let merged = topCount
           .filter((x: any) => x.key) // drop blank
           .map((x: any) => ({ owner: x.key, parcels: x.value, total: mVal.get(x.key) || 0 }))
-          .sort((a: any, b: any) => (b.total - a.total || b.parcels - a.parcels))
-          .slice(0, 20);
+          .sort((a: any, b: any) => (b.total - a.total || b.parcels - a.parcels));
+        // If user requested residential only, prefer owners that look like person names
+        if (labOwnerScope === "residential") {
+          merged = merged.filter((m: any) => isLikelyPersonName(m.owner));
+        }
+        merged = merged.slice(0, 20);
         setOwners(merged);
         // compute top owner share
         if (merged.length) {
           const top = merged[0];
-          setKpi((k) => k ? ({ ...k, topOwnerShare: { owner: top.owner, share: top.total } }) : ({ total, business, sumVal, avgVal: total ? sumVal / total : 0, topOwnerShare: { owner: top.owner, share: top.total } }));
+          const share = sumVal ? top.total / sumVal : 0;
+          setKpi((k) => k ? ({ ...k, topOwnerShare: { owner: top.owner, share } }) : ({ total, business, sumVal, avgVal: total ? sumVal / total : 0, topOwnerShare: { owner: top.owner, share } }));
         }
       } else setOwners([]);
 
@@ -427,7 +439,8 @@ export default function App() {
         setZipLeaders(zl);
         if (zl.length) {
           const top = zl[0];
-          setKpi((k) => k ? ({ ...k, topZipShare: { zip: top.zip, share: top.total } }) : ({ total, business, sumVal, avgVal: total ? sumVal / total : 0, topZipShare: { zip: top.zip, share: top.total } }));
+          const share = sumVal ? top.total / sumVal : 0;
+          setKpi((k) => k ? ({ ...k, topZipShare: { zip: top.zip, share } }) : ({ total, business, sumVal, avgVal: total ? sumVal / total : 0, topZipShare: { zip: top.zip, share } }));
         }
       } else setZipLeaders([]);
 
